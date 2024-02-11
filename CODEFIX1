@@ -1,0 +1,705 @@
+import tkinter as tk
+from tkinter import ttk, Canvas, Scrollbar, messagebox, filedialog, scrolledtext
+import os
+import shutil
+import qrcode
+from PIL import Image, ImageTk, ExifTags
+import datetime
+import csv
+
+# Define SplashScreen class
+class SplashScreen(tk.Toplevel):
+    def __init__(self, parent, splash_image_path):
+        super().__init__(parent)
+        self.overrideredirect(True)
+        self.geometry("+{}+{}".format(parent.winfo_screenwidth() // 2 - 250, parent.winfo_screenheight() // 2 - 150))
+        self.splash_image = tk.PhotoImage(file=splash_image_path)
+        self.label = tk.Label(self, image=self.splash_image)
+        self.label.pack()
+        # Schedule a method to close the splash screen after 5 seconds
+        self.after(5000, self.destroy)
+
+# Define the path to the temp folder
+temp_folder = r"C:\ASPStudioFiles\ASPCodeRoom\DEVLab\PhotoSchoolSoftware\Temp"
+
+# Create a timestamp for the current date and time
+timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
+
+# Define the name of the notes file using the timestamp
+notes_file_name = f"notes.txt"
+# BLOCKED OUT: Use this line of text if you want the date and time to show as the notes filenmae. --> notes_file_name = f"tempNotes_{timestamp}.txt"
+
+# Combine the temp folder path with the notes file name
+notes_file_path = os.path.join(temp_folder, notes_file_name)
+
+def open_notes_window(self):
+    notes_window = tk.Toplevel(self)
+    notes_window.title("Notes")
+    notes_window.geometry("400x300")  # Set the dimensions as per your preference
+
+    # Create a Text widget to display the content
+    notes_text = tk.Text(notes_window, wrap="word")
+    notes_text.pack(expand=True, fill="both")
+
+    # Read the content of the text file and insert it into the Text widget
+    with open(notes_file_path, "r") as file:  # Use notes_file_path here
+        notes_content = file.read()
+        notes_text.insert("1.0", notes_content)
+
+        self.notes_text = tk.Text(self, wrap="word")
+        self.notes_text.pack(expand=True, fill="both")
+
+        # Add buttons to the Notes window
+        self.add_note_button = tk.Button(self, text="Add Note", command=self.add_note)
+        self.add_note_button.pack(pady=5)
+
+        self.save_notes_button = tk.Button(self, text="Save Notes", command=self.save_notes)
+        self.save_notes_button.pack(pady=5)
+
+        self.exit_button = tk.Button(self, text="Exit", command=self.destroy)
+        self.exit_button.pack(pady=5)
+
+    def add_note(self):
+        # Implement functionality to add a note
+        pass
+
+    def save_notes(self):
+        # Implement functionality to save notes
+        pass
+
+# Define ImageManager class
+class ImageManager:
+    def __init__(self):
+        self.hot_folder = ""
+        self.backup_folder = ""
+        self.current_qr_code = None
+        self.series_counter = 0
+        self.image_counter = 0
+        self.backup_enabled = tk.BooleanVar(value=True)
+
+    def set_hot_folder(self, folder_path):
+        self.hot_folder = folder_path
+        self.create_backup_folder()
+
+    def set_backup_folder(self, folder_path):
+        self.backup_folder = folder_path
+
+    def scan_qr_code(self, qr_code):
+        self.current_qr_code = qr_code
+
+    def generate_qr_code_image(self):
+        if self.current_qr_code:
+            timestamp = datetime.now().strftime("%Y-%m-%d")
+            image_filename = f"{self.current_qr_code}_{self.series_counter:02d}_{timestamp}.png"
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(self.current_qr_code)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            image_path = os.path.join(self.hot_folder, image_filename)
+            img.save(image_path)
+
+    def create_image_filename(self, image_format):
+        if self.current_qr_code is not None:
+            timestamp = datetime.now().strftime("%Y-%m-%d")
+            image_filename = f"{self.current_qr_code}_{self.series_counter:02d}_{timestamp}.{image_format}"
+            return image_filename
+        else:
+            return None
+
+    def create_backup_folder(self):
+        if self.backup_enabled.get():
+            hot_folder_parent = os.path.dirname(self.hot_folder)
+            backup_folder_path = os.path.join(hot_folder_parent, "BackupFolder")
+            os.makedirs(backup_folder_path, exist_ok=True)
+            self.backup_folder = backup_folder_path
+
+    def organize_images(self, image_filename):
+        if self.hot_folder and self.backup_folder:
+            image_src = os.path.join(self.hot_folder, image_filename)
+            image_dst = os.path.join(self.backup_folder, image_filename)
+            shutil.copy(image_src, image_dst)
+
+    def get_image_exif_data(self, image_path):
+        exif_data = {}
+        try:
+            with Image.open(image_path) as img:
+                exif_info = img._getexif()
+                if exif_info:
+                    for tag, value in exif_info.items():
+                        if tag in ExifTags.TAGS:
+                            tag_name = ExifTags.TAGS[tag]
+                            exif_data[tag_name] = value
+        except Exception as e:
+            print(f"Error reading EXIF data: {e}")
+        return exif_data
+
+       
+
+# Define Application class
+class Application(tk.Tk):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.title("ASP PHOTO SOFTWARE 2024")
+        self.geometry("1800x900")
+        splash_image_path = "C:/ASPStudioFiles/ASPCodeRoom/DEVLab/PhotoSchoolSoftware/SPLASH.png"
+        self.load_splash_screen(splash_image_path)
+        self.image_manager = ImageManager()
+        self.photo_images = []
+        self.image_labels = []
+        self.selected_image = None
+        self.text_csv_contents = None
+        self.create_widgets()
+        self.create_menu_bar()  # Add the creation of the menu bar
+        self.create_image_preview_pane()  # Add the creation of the image preview pane
+        self.center_window()
+        self.set_favicon()
+
+        # Check if 'notes.txt' exists in the temp folder
+        if not os.path.exists(notes_file_path):
+            # If it does not exist, create one and use it
+            with open(notes_file_path, "w") as f:
+                f.write("")
+
+    def load_splash_screen(self, splash_image_path):
+        splash = SplashScreen(self, splash_image_path)
+        # Prevent the main window from closing when the splash screen is open
+        self.withdraw()
+
+        # Schedule a method to show the main window after 5 seconds
+        self.after(5000, self.show_main_window)
+
+    def show_main_window(self):
+        # Show the main window after 5 seconds
+        self.deiconify()
+        # Add your main window content here
+
+    def create_widgets(self):
+        # Existing widget creation code here
+        self.label_hot_folder = tk.Label(self, text="Hot Folder:")
+        self.label_hot_folder.grid(row=0, column=0, sticky="w")
+
+        self.entry_hot_folder = tk.Entry(self, width=80)
+        self.entry_hot_folder.grid(row=0, column=0, padx=75, pady=5, columnspan=3)
+
+        self.button_hot_folder = tk.Button(self, text="Browse", command=self.select_hot_folder)
+        self.button_hot_folder.grid(row=0, column=2, padx=5, pady=5)
+
+        self.label_backup_folder = tk.Label(self, text="Backup Folder:")
+        self.label_backup_folder.grid(row=1, column=0, sticky="w")
+
+        self.entry_backup_folder = tk.Entry(self, width=80)
+        self.entry_backup_folder.grid(row=1, column=0, padx=95, pady=5, columnspan=3)
+
+        self.button_backup_folder = tk.Button(self, text="Change", command=self.change_backup_folder)
+        self.button_backup_folder.grid(row=1, column=2, padx=5, pady=5)
+
+        self.checkbox_backup_enabled = tk.Checkbutton(self, text="Enable Backup", variable=self.image_manager.backup_enabled)
+        self.checkbox_backup_enabled.grid(row=2, column=0, padx=0, pady=5, columnspan=2, sticky="w")
+
+        self.label_qr_code = tk.Label(self, text="QR Code:")
+        self.label_qr_code.grid(row=3, column=0, sticky="w")
+
+        self.entry_qr_code = tk.Entry(self, width=40)
+        self.entry_qr_code.grid(row=3, column=0, padx=95, pady=5, columnspan=2, sticky="w")
+
+        self.button_scan_qr = tk.Button(self, text="Scan QR Code", command=self.scan_qr, state=tk.DISABLED)
+        self.button_scan_qr.grid(row=3, column=1, padx=190, pady=5, sticky="w")
+
+        self.label_current_qr_code = tk.Label(self, text="Current QR Code: None", fg="red")
+        self.label_current_qr_code.grid(row=4, column=0, padx=5, pady=5, sticky="w", columnspan=3)
+
+        self.label_image_counter = tk.Label(self, text="Photos taken under USN: 0")
+        self.label_image_counter.grid(row=5, column=0, padx=5, pady=5, sticky="w", columnspan=3)
+
+        self.image_frame = tk.Frame(self)
+        self.image_frame.grid(row=6, column=0, columnspan=5, padx=5, pady=5, sticky="nsew")
+
+        self.image_canvas = tk.Canvas(self.image_frame, bg="white", width=1000, height=200, scrollregion=(0, 0, 1000, 200))
+        self.image_canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.image_scrollbar = tk.Scrollbar(self.image_frame, orient="horizontal", command=self.image_canvas.xview)
+        self.image_scrollbar.grid(row=1, column=0, sticky="ew")
+        self.image_canvas.config(xscrollcommand=self.image_scrollbar.set)
+
+        self.image_frame.bind("<Configure>", self.on_configure)
+
+        self.label_fstop = tk.Label(self, text="F-Stop:")
+        self.label_fstop.grid(row=0, column=5, sticky="w", padx=10, pady=5)
+
+        self.label_shutter_speed = tk.Label(self, text="Shutter Speed:")
+        self.label_shutter_speed.grid(row=1, column=5, sticky="w", padx=10, pady=5)
+
+        self.label_iso = tk.Label(self, text="ISO:")
+        self.label_iso.grid(row=2, column=5, sticky="w", padx=10, pady=5)
+
+        self.button_select_csv = tk.Button(self, text="Import Job Data", command=self.select_csv_file)
+        self.button_select_csv.grid(row=8, column=0, padx=5, pady=5, sticky="w")
+
+        self.label_csv_filename = tk.Label(self, text="Job Data File: ", wraplength=600, anchor="w")
+        self.label_csv_filename.grid(row=8, column=0, padx=120, pady=5, sticky="w", columnspan=4)
+
+        # Company Branding - Copyright
+        self.label_copyright = tk.Label(self, text="Copyright © 2024 BrandonsVision. All rights reserved.")
+        self.label_copyright.grid(row=50, column=0, columnspan=5, padx=5, pady=5, sticky="w")
+        pass
+
+    # Create a NotesPopup instance
+        self.notes_popup = None
+
+    def show_notes_popup(self):
+        if not self.notes_popup or not tk.Toplevel.winfo_exists(self.notes_popup):
+            self.notes_popup = NotesPopup(self)
+
+        # Your existing code...
+        # Add a button to open the Notes popup
+        self.notes_button = tk.Button(self, text="Notes", command=self.show_notes_popup)
+        self.notes_button.grid(row=11, column=0, padx=5, pady=5, sticky="w")
+
+    def create_menu_bar(self):
+        menubar = tk.Menu(self)
+
+        # Create a "File" menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Exit", command=self.quit)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        # Create a "Preferences" menu
+        preferences_menu = tk.Menu(menubar, tearoff=0)
+        preferences_menu.add_command(label="Set Hot Folder [F2]", command=self.select_hot_folder)
+        preferences_menu.add_command(label="Change Backup Folder", command=self.change_backup_folder)
+        preferences_menu.add_separator()  # Add a separator line
+        preferences_menu.add_checkbutton(label="Enable Backup", variable=self.image_manager.backup_enabled)
+        menubar.add_cascade(label="Preferences", menu=preferences_menu)
+
+        # Create a "Notes" menu
+        notes_menu = tk.Menu(menubar, tearoff=0)
+        notes_menu.add_command(label="Open Notes", command=self.open_notes_window)
+        menubar.add_cascade(label="Notes", menu=notes_menu)
+
+        self.config(menu=menubar)
+
+        # Hot Keys
+        #F2
+        self.bind_all("<F2>", lambda event: self.select_hot_folder()) 
+
+    def open_notes_window(self):
+        notes_window = tk.Toplevel(self)
+        notes_window.title("Notes")
+        notes_window.geometry("400x300")  # Set the dimensions as per your preference
+
+        # Create a Text widget to display the content
+        notes_text = tk.Text(notes_window, wrap="word")
+        notes_text.pack(expand=True, fill="both")
+
+        # Read the content of the text file and insert it into the Text widget
+        with open(notes_file_path, "r") as file:
+            notes_content = file.read()
+            notes_text.insert("1.0", notes_content)
+
+        # Add buttons to the Notes window
+        add_note_button = tk.Button(notes_window, text="Add Note")
+        add_note_button.pack(pady=5)
+
+        save_notes_button = tk.Button(notes_window, text="Save Notes")
+        save_notes_button.pack(pady=5)
+
+        exit_button = tk.Button(notes_window, text="Exit", command=notes_window.destroy)
+        exit_button.pack(pady=5)
+
+    def select_hot_folder(self):
+        pass
+
+    def change_backup_folder(self):
+        pass
+
+    def set_favicon(self):
+        # Provide the path to your icon file
+        icon_path = "C:\ASPStudioFiles\ASPCodeRoom\DEVLab\PhotoSchoolSoftware\AppIcons\Guillendesign-Variations-1-Camera.ico"
+
+        # Set the icon for the application
+        self.iconbitmap(icon_path)
+
+    def center_window(self):
+        # Update the window information to ensure accurate calculations
+        self.update_idletasks()
+
+        # Get the window's width and height
+        window_width = self.winfo_width()
+        window_height = self.winfo_height()
+
+        # Get the screen width and height
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+
+        # Calculate the position of the window to center it on the screen
+        x_coordinate = (screen_width - window_width) // 2
+        y_coordinate = (screen_height - window_height) // 2
+
+        # Set the window position
+        self.geometry("+{}+{}".format(x_coordinate, y_coordinate))
+
+        # Existing widget creation code here
+        self.label_hot_folder = tk.Label(self, text="Hot Folder:")
+        self.label_hot_folder.grid(row=0, column=0, sticky="w")
+
+        self.entry_hot_folder = tk.Entry(self, width=80)
+        self.entry_hot_folder.grid(row=0, column=0, padx=75, pady=5, columnspan=3)
+
+        self.button_hot_folder = tk.Button(self, text="Browse", command=self.select_hot_folder)
+        self.button_hot_folder.grid(row=0, column=2, padx=5, pady=5)
+
+        self.label_backup_folder = tk.Label(self, text="Backup Folder:")
+        self.label_backup_folder.grid(row=1, column=0, sticky="w")
+
+        self.entry_backup_folder = tk.Entry(self, width=80)
+        self.entry_backup_folder.grid(row=1, column=0, padx=95, pady=5, columnspan=3)
+
+        self.button_backup_folder = tk.Button(self, text="Change", command=self.change_backup_folder)
+        self.button_backup_folder.grid(row=1, column=2, padx=5, pady=5)
+
+        self.checkbox_backup_enabled = tk.Checkbutton(self, text="Enable Backup", variable=self.image_manager.backup_enabled)
+        self.checkbox_backup_enabled.grid(row=2, column=0, padx=0, pady=5, columnspan=2, sticky="w")
+
+        self.label_qr_code = tk.Label(self, text="QR Code:")
+        self.label_qr_code.grid(row=3, column=0, sticky="w")
+
+        self.entry_qr_code = tk.Entry(self, width=40)
+        self.entry_qr_code.grid(row=3, column=0, padx=95, pady=5, columnspan=2, sticky="w")
+
+        self.button_scan_qr = tk.Button(self, text="Scan QR Code", command=self.scan_qr, state=tk.DISABLED)
+        self.button_scan_qr.grid(row=3, column=1, padx=190, pady=5, sticky="w")
+
+        self.label_current_qr_code = tk.Label(self, text="Current QR Code: None", fg="red")
+        self.label_current_qr_code.grid(row=4, column=0, padx=5, pady=5, sticky="w", columnspan=3)
+
+        self.label_image_counter = tk.Label(self, text="Photos taken under USN: 0")
+        self.label_image_counter.grid(row=5, column=0, padx=5, pady=5, sticky="w", columnspan=3)
+
+        self.image_frame = tk.Frame(self)
+        self.image_frame.grid(row=6, column=0, columnspan=5, padx=5, pady=5, sticky="nsew")
+
+        self.image_canvas = tk.Canvas(self.image_frame, bg="white", width=1000, height=200, scrollregion=(0, 0, 1000, 200))
+        self.image_canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.image_scrollbar = tk.Scrollbar(self.image_frame, orient="horizontal", command=self.image_canvas.xview)
+        self.image_scrollbar.grid(row=1, column=0, sticky="ew")
+        self.image_canvas.config(xscrollcommand=self.image_scrollbar.set)
+
+        self.image_frame.bind("<Configure>", self.on_configure)
+
+        self.label_fstop = tk.Label(self, text="F-Stop:")
+        self.label_fstop.grid(row=0, column=5, sticky="w", padx=10, pady=5)
+
+        self.label_shutter_speed = tk.Label(self, text="Shutter Speed:")
+        self.label_shutter_speed.grid(row=1, column=5, sticky="w", padx=10, pady=5)
+
+        self.label_iso = tk.Label(self, text="ISO:")
+        self.label_iso.grid(row=2, column=5, sticky="w", padx=10, pady=5)
+
+        self.button_select_csv = tk.Button(self, text="Import Job Data", command=self.select_csv_file)
+        self.button_select_csv.grid(row=8, column=0, padx=5, pady=5, sticky="w")
+
+        self.label_csv_filename = tk.Label(self, text="Job Data File: ", wraplength=600, anchor="w")
+        self.label_csv_filename.grid(row=8, column=0, padx=120, pady=5, sticky="w", columnspan=4)
+
+        self.label_hot_folder_count = tk.Label(self, text="Total Images In Session: 0")
+        self.label_hot_folder_count.grid(row=5, column=1, padx=5, pady=5, sticky="w", columnspan=3)
+
+        # Company Branding - Copyright
+        self.label_copyright = tk.Label(self, text="Copyright © 2024 BrandonsVision. All rights reserved.")
+        self.label_copyright.grid(row=50, column=0, columnspan=5, padx=5, pady=5, sticky="w")
+
+    def on_configure(self, event):
+        self.image_canvas.configure(scrollregion=self.image_canvas.bbox("all"))
+
+    def select_hot_folder(self):
+        folder_path = filedialog.askdirectory()
+        if folder_path:
+            self.image_manager.set_hot_folder(folder_path)
+            self.entry_hot_folder.delete(0, tk.END)
+            self.entry_hot_folder.insert(0, folder_path)
+            self.button_scan_qr.config(state=tk.NORMAL)
+            self.entry_backup_folder.delete(0, tk.END)
+            self.entry_backup_folder.insert(0, self.image_manager.backup_folder)
+            self.display_thumbnails()
+
+    def scan_qr(self):
+        qr_code = self.entry_qr_code.get()
+        if qr_code:
+            self.image_manager.scan_qr_code(qr_code)
+            self.label_current_qr_code.config(text=f"Current QR Code: {qr_code}", fg="green")
+            messagebox.showinfo("QR Code Scanned", f"QR Code '{qr_code}' scanned successfully.")
+            self.highlight_associated_images(qr_code)
+        else:
+            messagebox.showerror("Error", "Please enter a valid QR code.")
+
+    def display_thumbnails(self):
+        if self.image_manager.hot_folder:
+            image_files = [file for file in os.listdir(self.image_manager.hot_folder) if file.endswith(('.png', '.jpg', '.jpeg'))]
+            x_pos = 50
+            max_height = 0
+            for image_file in image_files:
+                image_path = os.path.join(self.image_manager.hot_folder, image_file)
+                image = Image.open(image_path)
+                image.thumbnail((100, 100))
+                photo = ImageTk.PhotoImage(image)
+                self.photo_images.append((photo, image_path))  
+                label_image = tk.Label(self.image_canvas, text=image_file, wraplength=100)
+                label_image_photo = tk.Label(self.image_canvas, image=photo)
+                label_image_photo.bind("<Button-1>", lambda event, img_path=image_path: self.show_exif_data(img_path))
+                label_image_photo.bind("<Button-3>", lambda event, img_path=image_path: self.show_thumbnail_options(event, img_path))  # Bind right-click event
+                self.image_canvas.create_window(x_pos, 35, anchor=tk.N, window=label_image_photo)
+                self.image_canvas.create_window(x_pos, 140, anchor=tk.N, window=label_image)
+                self.image_canvas.create_rectangle(x_pos - 35, 35, x_pos + 35, 100, outline="light gray", width=1)
+                x_pos += 120
+                max_height = max(max_height, image.height)
+            self.image_canvas.config(height=max_height + 100)
+            self.label_hot_folder_count.config(text=f"Total Images In Session: {len(image_files)}")
+
+    def show_thumbnail_options(self, event, image_path):
+        # Create the right-click menu
+        thumbnail_menu = tk.Menu(self, tearoff=0)
+        
+        # Add options to view image in preview pane or in explorer
+        thumbnail_menu.add_command(label="View Image In Preview Pane", command=lambda: self.display_in_preview_pane(image_path))
+        thumbnail_menu.add_command(label="View Image in Explorer", command=lambda: self.open_in_explorer(image_path))
+        
+        # Display the menu at the location of the right-click event
+        thumbnail_menu.post(event.x_root, event.y_root)
+
+    def display_in_preview_pane(self, image_path):
+        # Implement the functionality to display the image in the preview pane
+        self.display_image_in_preview(image_path)
+
+    def open_in_explorer(self, image_path):
+        # Implement the functionality to open the image in the default image viewer
+        os.startfile(image_path)
+
+    def show_exif_data(self, image_path):
+        self.selected_image = image_path
+        exif_data = self.image_manager.get_image_exif_data(image_path)
+        
+        if exif_data:
+            shutter_speed = exif_data.get('ExposureTime', 'N/A')
+            if shutter_speed != 'N/A':
+                try:
+                    shutter_speed_float = float(shutter_speed)
+                    if shutter_speed_float > 1:
+                        shutter_speed = f"1/{int(1/shutter_speed_float)} sec"
+                    else:
+                        numerator = int(1 / shutter_speed_float)
+                        denominator = 1
+                        shutter_speed = f"{denominator}/{numerator} sec"
+                except ValueError:
+                    shutter_speed = f"{shutter_speed} sec"
+
+            self.label_fstop.config(text=f"F-Stop: {exif_data.get('FNumber', 'N/A')}")
+            self.label_shutter_speed.config(text=f"Shutter Speed: {shutter_speed}")
+            self.label_iso.config(text=f"ISO: {exif_data.get('ISOSpeedRatings', 'N/A')}")
+        else:
+            self.label_fstop.config(text="F-Stop: N/A")
+            self.label_shutter_speed.config(text="Shutter Speed: N/A")
+            self.label_iso.config(text="ISO: N/A")
+
+    def highlight_associated_images(self, qr_code):
+        if self.image_manager.hot_folder:
+            for item in self.image_canvas.find_all():
+                self.image_canvas.itemconfig(item, outline="")
+            associated_images = [item for item in self.image_canvas.find_all() if qr_code in os.path.basename(self.image_canvas.gettags(item)[0])]
+            for item in associated_images:
+                self.image_canvas.itemconfig(item, outline="red", width=2)
+
+    def change_backup_folder(self):
+        if self.image_manager.hot_folder:
+            folder_path = filedialog.askdirectory()
+            if folder_path:
+                self.image_manager.set_backup_folder(folder_path)
+                self.entry_backup_folder.delete(0, tk.END)
+                self.entry_backup_folder.insert(0, folder_path)
+
+    def select_csv_file(self):
+        csv_file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        if csv_file_path:
+            self.display_csv_contents(csv_file_path)
+            self.label_csv_filename.config(text=f"Job Data File: {os.path.basename(csv_file_path)}")
+
+    def display_csv_contents(self, csv_file_path):
+        if self.text_csv_contents:
+            self.text_csv_contents.destroy()
+
+        csv_frame = tk.Frame(self)
+        csv_frame.grid(row=10, column=0, columnspan=5, padx=5, pady=5, sticky="nsew")
+
+        self.label_search = tk.Label(self, text="Search:")
+        self.label_search.grid(row=8, column=2, padx=(5, 0), pady=5, sticky="w")
+
+        self.search_entry = tk.Entry(self, font=("Arial", 18))  # Adjust font size as needed
+        self.search_entry.grid(row=8, column=2, padx=(60, 5), pady=5, sticky="w")
+        self.search_entry.bind("<KeyRelease>", self.search_csv_contents)
+
+        self.text_csv_header = tk.Text(csv_frame, wrap=tk.NONE, width=150, height=1)
+        self.text_csv_header.grid(row=1, column=0, sticky="ew")
+
+        self.text_csv_contents = tk.Text(csv_frame, wrap=tk.WORD, width=150, height=20)
+        self.text_csv_contents.grid(row=2, column=0, sticky="nsew")
+
+        csv_scrollbar = tk.Scrollbar(csv_frame, orient="vertical", command=self.text_csv_contents.yview)
+        csv_scrollbar.grid(row=2, column=1, sticky="ns")
+
+        self.text_csv_contents.config(yscrollcommand=csv_scrollbar.set)
+
+        with open(csv_file_path, newline='') as csvfile:
+            csv_reader = csv.reader(csvfile)
+            self.header_row = next(csv_reader)  
+            self.max_widths = [max(len(cell) for cell in col) for col in zip(*([self.header_row] + list(csv_reader)))]
+            csvfile.seek(0)  
+
+            formatted_header = '  '.join(cell.ljust(width) for cell, width in zip(self.header_row, self.max_widths))
+            self.text_csv_header.insert(tk.END, formatted_header + '\n')
+
+            next(csv_reader)  
+            self.csv_contents = []  
+            for row in csv_reader:
+                formatted_row = '  '.join(cell.ljust(width) for cell, width in zip(row, self.max_widths))
+                self.text_csv_contents.insert(tk.END, formatted_row + '\n')
+                self.csv_contents.append(row)  
+
+    def search_csv_contents(self, event=None):
+        query = self.search_entry.get().lower()  
+        self.text_csv_contents.delete(1.0, tk.END)  
+        formatted_header = self.text_csv_header.get(1.0, tk.END)  
+        self.text_csv_contents.insert(tk.END, formatted_header)  
+
+        for row in self.csv_contents:
+            if any(query in cell.lower() for cell in row):
+                formatted_row = '  '.join(cell.ljust(width) for cell, width in zip(row, self.max_widths))
+                self.text_csv_contents.insert(tk.END, formatted_row + '\n')
+
+    def create_image_preview_pane(self):
+        self.preview_pane_frame = tk.Frame(self, bg="white", bd=2, relief=tk.SUNKEN)
+        self.preview_pane_frame.grid(row=0, column=6, rowspan=11, padx=10, pady=10, sticky="nsew")
+
+        self.preview_canvas = Canvas(self.preview_pane_frame, bg="white", width=400, height=400, scrollregion=(0, 0, 400, 400))
+        self.preview_canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.preview_scrollbar = Scrollbar(self.preview_pane_frame, orient="vertical", command=self.preview_canvas.yview)
+        self.preview_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.preview_canvas.config(yscrollcommand=self.preview_scrollbar.set)
+
+        self.preview_canvas.bind("<Configure>", self.on_configure_preview)
+
+        self.preview_label = tk.Label(self.preview_pane_frame, text="No Image Selected", bg="white")
+        self.preview_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+    def on_configure_preview(self, event):
+        self.preview_canvas.configure(scrollregion=self.preview_canvas.bbox("all"))
+
+    def display_image_in_preview(self, image_path):
+        filename = os.path.basename(image_path)
+        self.preview_label.config(text=filename)  # Update the label with the filename
+
+        image = Image.open(image_path)
+        width, height = image.size
+
+        if width > 400 or height > 400:
+            ratio = min(400 / width, 400 / height)
+            width = int(width * ratio)
+            height = int(height * ratio)
+            image = image.resize((width, height))
+
+        # Display the image in the Preview Pane
+        self.preview_photo = ImageTk.PhotoImage(image)  # Corrected line
+        self.preview_canvas.create_image(0, 0, anchor="nw", image=self.preview_photo)
+        self.preview_canvas.config(scrollregion=self.preview_canvas.bbox("all"))
+
+        # Retrieve and display the metadata
+        exif_data = self.image_manager.get_image_exif_data(image_path)
+        if exif_data:
+            shutter_speed = exif_data.get('ExposureTime', 'N/A')
+            if shutter_speed != 'N/A':
+                try:
+                    shutter_speed_float = float(shutter_speed)
+                    if shutter_speed_float > 1:
+                        shutter_speed = f"1/{int(1/shutter_speed_float)} sec"
+                    else:
+                        numerator = int(1 / shutter_speed_float)
+                        denominator = 1
+                        shutter_speed = f"{denominator}/{numerator} sec"
+                except ValueError:
+                    shutter_speed = f"{shutter_speed} sec"
+
+            # Update the metadata labels
+            self.label_fstop.config(text=f"F-Stop: {exif_data.get('FNumber', 'N/A')}")
+            self.label_shutter_speed.config(text=f"Shutter Speed: {shutter_speed}")
+            self.label_iso.config(text=f"ISO: {exif_data.get('ISOSpeedRatings', 'N/A')}")
+        else:
+            # If no metadata found, update metadata labels with 'N/A'
+            self.label_fstop.config(text="F-Stop: N/A")
+            self.label_shutter_speed.config(text="Shutter Speed: N/A")
+            self.label_iso.config(text="ISO: N/A")
+
+    def create_image_preview_pane(self):
+        # Adjust the width and height of the frame containing the Preview Pane
+        self.preview_pane_frame = tk.Frame(self, bg="white", bd=2, relief=tk.SUNKEN, width=500, height=500)
+        self.preview_pane_frame.grid(row=0, column=6, rowspan=11, padx=10, pady=10, sticky="nsew")
+
+        # Adjust the width and height of the Canvas widget inside the Preview Pane
+        self.preview_canvas = Canvas(self.preview_pane_frame, bg="white", width=500, height=500, scrollregion=(0, 0, 500, 500))
+        self.preview_canvas.grid(row=0, column=0, sticky="nsew")
+
+        #self.preview_scrollbar = Scrollbar(self.preview_pane_frame, orient="vertical", command=self.preview_canvas.yview)
+        #self.preview_scrollbar.grid(row=0, column=1, sticky="ns")
+        #self.preview_canvas.config(yscrollcommand=self.preview_scrollbar.set)
+
+        self.preview_canvas.bind("<Configure>", self.on_configure_preview)
+
+        self.preview_label = tk.Label(self.preview_pane_frame, text="No Image Selected", bg="white")
+        self.preview_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+    def on_configure_preview(self, event):
+        self.preview_canvas.configure(scrollregion=self.preview_canvas.bbox("all"))
+
+class MainApplication(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Main Application")
+        self.geometry("600x400")
+
+        self.notes_button = tk.Button(self, text="Open Notes", command=self.open_notes)
+        self.notes_button.pack(pady=20)
+
+    def open_notes(self):
+        notes_popup = NotesPopup(self)
+
+class NotesPopup(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Notes")
+        self.geometry("400x300")
+
+        self.notes_text = tk.Text(self, wrap="word")
+        self.notes_text.pack(expand=True, fill="both")
+
+        # Add buttons to the Notes window
+        self.add_note_button = tk.Button(self, text="Add Note", command=self.add_note)
+        self.add_note_button.pack(pady=5)
+
+        self.save_notes_button = tk.Button(self, text="Save Notes", command=self.save_notes)
+        self.save_notes_button.pack(pady=5)
+
+        self.exit_button = tk.Button(self, text="Exit", command=self.destroy)
+        self.exit_button.pack(pady=5)
+
+    def add_note(self):
+        # Implement functionality to add a note
+        pass
+
+    def save_notes(self):
+        # Implement functionality to save notes
+        pass
+
+if __name__ == "__main__":
+    app = Application()
+    app.mainloop()
+
